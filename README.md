@@ -1,5 +1,5 @@
 # raspi_rfm69_lacrosse
-Receive wireless sensor for outdoor temperature/humidity like TX29 or similar.
+Receive wireless sensor for outdoor temperature/humidity like TX29, TX29DTH-IT or similar.
 
 wire a rfm69 module to the spi pins of a raspberry.
 one extra gpi pin ("D0" on rfm) is needed to receive interrupts from the rfm69 without polling.
@@ -25,4 +25,4 @@ RFM-~   GND             |25|26| GPIO 7 (CE1)      RFM-D0
 
 ```
 
-![alt text](https://raw.githubusercontent.com/CaptainDouche/raspi_rfm69_lacrosse/master/doc/raspi_rfm69_20180415_211208_50p.jpg)
+![my wiring](https://raw.githubusercontent.com/CaptainDouche/raspi_rfm69_lacrosse/master/doc/raspi_rfm69_20180415_211208_50p.jpg)
