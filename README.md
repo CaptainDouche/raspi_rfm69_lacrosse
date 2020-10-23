@@ -3,6 +3,9 @@ Receive wireless sensor for outdoor temperature/humidity like TX29, TX29DTH-IT o
 
 wire a rfm69 module to the spi pins of a raspberry.
 one extra gpi pin ("D0" on rfm) is needed to receive interrupts from the rfm69 without polling.
+Note: The RFM-D0 Pin may also be wired to a different GPIO-Pin (by changing the `#define` for `RFM69_IRQ_GPIONUM`).
+This would be required, if you have a secondary SPI-slave on the Bus.
+Using `GPIO 7` has the advantage, that all pins fit into a 2 x 5 pin header.
 
 __Wiring:__
 
