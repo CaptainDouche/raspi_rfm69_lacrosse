@@ -28,4 +28,4 @@ RFM-~   GND             |25|26| GPIO 7 (CE1)      RFM-D0
 
 ```
 
-![my wiring](https://raw.githubusercontent.com/CaptainDouche/raspi_rfm69_lacrosse/master/doc/raspi_rfm69_20180415_211208_50p.jpg)
+![my wiring](https://raw.githubusercontent.com/CaptainDouche/raspi_rfm69_lacrosse/master/doc/rpi_rfm69hw_tx29dht-it.jpg)
