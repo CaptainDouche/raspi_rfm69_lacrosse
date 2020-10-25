@@ -9,13 +9,13 @@ If not provided/wired (`-noirq`), then polling is used (about 1/10 seconds), whi
 __Wiring:__
 
 ```
-        Raspi Pinout-Header:
+                    Raspi Pinout-Header:
                            +--+--+
           3,3V             | 1|2 | 5V                
-  RFM-RST GPIO-02 (SDA1)   | 3|4 | 5V
+          GPIO-02 (SDA1)   | 3|4 | 5V
           GPIO-03 (SCL1)   | 5|6 | GND               
   RFM-D0  GPIO-04 (GPCLK0) | 7|8 | GPIO-14 (TxD)
-  LCD-RW  GND              | 9|10| GPIO-15 (RxD)
+          GND              | 9|10| GPIO-15 (RxD)
           GPIO-17 (CE1')   |11|12| GPIO-18 (PCM,CE0') 
           GPIO-27          |13|14| GND
           GPIO-22          |15|16| GPIO-23           
