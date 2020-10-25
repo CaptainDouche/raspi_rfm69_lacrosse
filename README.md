@@ -7,7 +7,6 @@ If provided/wired (`-irq <GPIONUM>`), it can be used for interrupt driven data r
 If not provided/wired (`-noirq`), then polling is used (about 1/10 seconds), which is fast enough and not CPU-hungry.
 
 __Wiring:__
-
 ```
                     Raspi Pinout-Header:
                            +--+--+
@@ -33,6 +32,23 @@ __Wiring:__
           GND              |39|40| GPIO-21 (SCLK')
                            +--+--+
 
+```
+
+__Usage example:__
+```
+pi@raspi$ rfm69_lacrosse -format "@H:@M:@S: %x_%t=%v %u\\n"
+18:17:45: temp_2c=+12.0 C
+18:17:45: humid_2c=72 %
+18:17:45: batt_new_2c=0
+18:17:45: batt_weak_2c=0
+18:17:46: temp_c0=+20.9 C
+18:17:46: humid_c0=76 %
+18:17:46: batt_new_c0=0
+18:17:46: batt_weak_c0=0
+18:17:46: temp_58=+10.1 C
+18:17:46: humid_58=89 %
+18:17:46: batt_new_58=0
+18:17:46: batt_weak_58=0
 ```
 
 ![my wiring](https://raw.githubusercontent.com/CaptainDouche/raspi_rfm69_lacrosse/master/doc/rpi_rfm69hw_tx29dht-it.jpg)
