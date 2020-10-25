@@ -4,27 +4,54 @@
 
 // http://www.netzmafia.de/skripten/hardware/RasPi/RasPi_GPIO.html
 //          Raspi2 Pinout-Header:
-//                          +--+--+
-//  RFM-~   3,3V            | 1|2 | 5V                LCD-VCC
-//  RFM-RST GPIO 2 (SDA1)   | 3|4 |
-//          GPIO 3 (SCL1)   | 5|6 | GND               LCD-GND
-//  RFM-D0  GPIO 4 (GPCLK0) | 7|8 | GPIO 14 (TxD)
-//  LCD-RW  GND             | 9|10| GPIO 15 (RxD)
-//  LCD-E   GPIO 17         |11|12| GPIO 18 (PCM_CLK) LCD-LIGHT
-//  LCD-RS  GPIO 27         |13|14| GND
-//  LCD-4   GPIO 22         |15|16| GPIO 23           LCD-5
-//          3,3V            |17|18| GPIO 24           LCD-6
-//  RFM-~   GPIO 10 (MOSI)  |19|20| GND
-//  RFM-~   GPIO 9  (MISO)  |21|22| GPIO 25           LCD-7
-//  RFM-~   GPIO 11 (SCLK)  |23|24| GPIO 8 (CE0)      RFM-NSS
-//  RFM-~   GND             |25|26| GPIO 7 (CE1)      RFM-D0
-//                          +--+--+
+//                           +--+--+
+//          3,3V             | 1|2 | 5V                
+//  RFM-RST GPIO-02 (SDA1)   | 3|4 | 5V
+//          GPIO-03 (SCL1)   | 5|6 | GND               
+//  RFM-D0  GPIO-04 (GPCLK0) | 7|8 | GPIO-14 (TxD)
+//  LCD-RW  GND              | 9|10| GPIO-15 (RxD)
+//          GPIO-17 (CE1')   |11|12| GPIO-18 (PCM,CE0') 
+//          GPIO-27          |13|14| GND
+//          GPIO-22          |15|16| GPIO-23           
+//  RFM-~   3,3V             |17|18| GPIO-24           
+//  RFM-~   GPIO-10 (MOSI)   |19|20| GND
+//  RFM-~   GPIO-09 (MISO)   |21|22| GPIO-25           
+//  RFM-~   GPIO-11 (SCLK)   |23|24| GPIO-08 (CE0)     RFM-NSS (optional)
+//  RFM-~   GND              |25|26| GPIO-07 (CE1)     RFM-D0
+//          EE_SDA           |27|28| EE_SCL 
+//          GPIO-05          |29|30| GND 
+//          GPIO-06          |31|32| GPIO-12 
+//          GPIO-13          |33|34| GND 
+//          GPIO-19 (MISO')  |35|36| GPIO-16 (CE2')
+//          GPIO-26          |37|38| GPIO-20 (MOSI')
+//          GND              |39|40| GPIO-21 (SCLK')
+//                           +--+--+
+
+// spidev0.0 is [MOSI,MISO,SCLK,CE0]
+// spidev0.1 is [MOSI,MISO,SCLK,CE1]
+// spidev1.0 is [MOSI',MISO',SCLK',CE0'] 
+// spidev1.1 is [MOSI',MISO',SCLK',CE1'] 
+// spidev1.2 is [MOSI',MISO',SCLK',CE2'] 
+
+// To enable spi1 spidev1: set 
+// dtoverlay=spi1-1cs in /boot/config.txt. 
+// You can change the CE0 pin (e.g. to pin 23) by adding ,cs0_pin=23 to the overlay. 
+// See /boot/overlays/README for more info. 
 
 // esp32 spi:
 // http://www.electronicwings.com/nodemcu/nodemcu-spi-with-arduino-ide
 
-#define RFM69_SPI_DEVFILE		"/dev/spidev0.0"
-#define RFM69_IRQ_GPIONUM		7
+
+#define SPI0_CE0				"/dev/spidev0.0" 
+#define SPI0_CE1				"/dev/spidev0.1"
+#define SPI1_CE0				"/dev/spidev1.0" 
+#define SPI1_CE1				"/dev/spidev1.1"
+#define SPI1_CE2				"/dev/spidev1.2"
+
+
+
+#define RFM69_SPI_DEVFILE		SPI0_CE0
+#define RFM69_IRQ_GPIONUM		-1 // 7
 
 #if 1 // registers & bits
 
@@ -1363,7 +1390,7 @@
 #endif // defines
 
 #include <stdint.h>
-//#include <stdbool.h>
+#include <stdbool.h>
 
 #include "defs.h"
 
@@ -1394,6 +1421,7 @@ int8_t rfm69_readTemperature(int8_t CalibrationTempVal);
 bool rfm69_test_reg_rw(void);
 
 #if (defined __RASPI__)
+extern int rfm69_irq_gpionum;
 //extern int rfm69_debuglevel;
 extern int verbosity;
 //#define RFM69_VERBOSITY(level)			{ rfm69_debuglevel = (level); }

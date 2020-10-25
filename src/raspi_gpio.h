@@ -12,6 +12,7 @@ typedef enum
 }	edgetype_t;
 
 #include <stdint.h>
+#include <stdbool.h>
 #include "defs.h"
 
 char* byte2bits(uint8_t x);

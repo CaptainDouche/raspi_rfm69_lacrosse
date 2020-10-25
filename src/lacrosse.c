@@ -15,6 +15,7 @@
 
 
 #include <stdint.h>
+#include <stdbool.h>
 #include <stdio.h>
 
 #include "defs.h"
@@ -33,24 +34,6 @@
 #define DATARATE					DATARATE_TX29DTH_IT	
 
 #define FREQUENCY_KHZ				868300
-
-
-
-
-static bool lacrosse_rfmrecv(uint8_t* payload, uint16_t size)
-{
-    if (rfm69_readReg(RFM69_REG_IRQFLAGS2) & RFM69_IRQFLAGS2_PAYLOADREADY)
-	{
-		rfm69_standBy();
-		rfm69_readFifo(payload, size);
-		rfm69_enableReceiver();
-		return true;
-    }
-	else
-	{
-		return false;
-	}
-}
 
 bool lacrosse_init(void)
 {
@@ -348,18 +331,68 @@ bool lacrosse_decode(const uint8_t* data, uint16_t len, lacsensor_t* lacs)
 	return false;
 }
 
-bool lacrosse_receive(lacsensor_t* lacs, int timeout)
+
+
+static bool lacrosse_rfmrecv(uint8_t* payload, uint16_t size)
 {
-	if (rfm69_waitForIrq(timeout, 0))
+    if (rfm69_readReg(RFM69_REG_IRQFLAGS2) & RFM69_IRQFLAGS2_PAYLOADREADY)
+	{
+		rfm69_standBy();
+		rfm69_readFifo(payload, size);
+		rfm69_enableReceiver();
+		return true;
+    }
+	else
+	{
+		return false;
+	}
+}
+
+bool lacrosse_receive_irq(lacsensor_t* lacs, int timeout_s)
+{
+	if (rfm69_waitForIrq(timeout_s, 0))
 	{		
 		uint8_t payload[PAYLOADSIZE];
 		if (lacrosse_rfmrecv(payload, PAYLOADSIZE))
 		{
 			return lacrosse_decode(payload, PAYLOADSIZE, lacs);
 		}
-	}	
-	
+	}
 	return false;
+}
+
+bool lacrosse_receive_poll(lacsensor_t* lacs, int timeout_s)
+{
+	#define POLL_DELAY_US	(100000ul)
+	_RFMDBG(1, "lacrosse_receive poll...");
+	
+	unsigned long timeout_us = timeout_s * 1000000;
+	while (timeout_us > 0)
+	{
+		uint8_t payload[PAYLOADSIZE];
+		if (lacrosse_rfmrecv(payload, PAYLOADSIZE))
+		{
+			return lacrosse_decode(payload, PAYLOADSIZE, lacs);
+		}
+		else
+		{
+			usleep(POLL_DELAY_US);
+			timeout_us -= POLL_DELAY_US;
+		}
+	}
+	return false;
+}
+
+bool lacrosse_receive(lacsensor_t* lacs, int timeout_s)
+{
+	if (rfm69_irq_gpionum > -1)
+	{
+		return lacrosse_receive_irq(lacs, timeout_s);
+	}
+	else // dont have an irq, must use polling
+	{
+		return lacrosse_receive_poll(lacs, timeout_s);
+	}
 }
 
 

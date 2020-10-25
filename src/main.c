@@ -17,47 +17,42 @@
 #include <unistd.h>
 #include <linux/limits.h>
 
-
 #include "defs.h"
 #include "colorprint.h"
-
-
 #include "lacrosse.h"
-
-
-int  verbosity 				= 0;
-bool isdaemon  				= false;
-const char* pidfile			= NULL;
-//const char* format 		= "{%n - %y: %t[%x]=%v %u }\\n";
-//const char* format 		= "%y: %t_%x=%v %u\\n";
 
 #define FORMAT_XDEBUG		"@Y-@d-@m, @H:@M:@S: %t_%x=%v %u\\n"
 #define FORMAT_DEBUG		"@H:@M:@S: %x_%t\t%v %u\\n"
 #define FORMAT_MQTT			"%x/%t=%v %u\\n"
 
-
+int  verbosity 				= 0;
+const char* pidfile			= NULL;
 const char* format 			= FORMAT_DEBUG;
-
-
-const char* outfilename		= NULL;
+//bool isdaemon  			= false;
+//const char* format 		= "{%n - %y: %t[%x]=%v %u }\\n";
+//const char* format 		= "%y: %t_%x=%v %u\\n";
+//const char* outfilename	= NULL;
 
 void usage(const char* progname)
 {
 	printf("Usage: %s [OPTIONS]\n", progname);
-	printf("  --format <FORMAT> may contain ...\n");
-	printf("    %%x = sensor id: <hex integer>"                                     "\n");
-	printf("    %%i = sensor id: <dec integer>"                                     "\n");
-	printf("    %%t = sensor type: temp|humid|rain|wdir|wspeed|wgust|pressure|..."  "\n");
-	printf("    %%v = sensor value: <float num>"                                    "\n");
-	printf("    %%u = sensor value unit: C|%|m/s|bar|..."                           "\n");
-	printf("    %%b = battery status: ok|low"                                       "\n");
-	printf("    %%n = is_new status: 0|1"                                           "\n");
-	printf("    %%e = error_status: 0|1"                                            "\n");
-	printf("    %%y = unix timestamp"                                               "\n");
-	printf("    @X  = will be passed to strftime as %%X format"                     "\n");	
-	printf("    \\n = newline (and other C-string-style escapes)"                   "\n");	
+	printf("  -ux                  unexport all GPIO ressources.\n");
+	printf("  -irq <GPIONUM>       use GPIO Pin <GPIONUM> for IRQ.\n");
+	printf("  -noirq               dont use an GPIO Pin for IRQ. (uses polling)\n");	
+	printf("  -format <FORMAT>     format the output. may contain ...\n");
+	printf("     %%x = sensor id: <hex integer>"                                     "\n");
+	printf("     %%i = sensor id: <dec integer>"                                     "\n");
+	printf("     %%t = sensor type: temp|humid|rain|wdir|wspeed|wgust|pressure|..."  "\n");
+	printf("     %%v = sensor value: <float num>"                                    "\n");
+	printf("     %%u = sensor value unit: C|%|m/s|bar|..."                           "\n");
+	printf("     %%b = battery status: ok|low"                                       "\n");
+	printf("     %%n = is_new status: 0|1"                                           "\n");
+	printf("     %%e = error_status: 0|1"                                            "\n");
+	printf("     %%y = unix timestamp"                                               "\n");
+	printf("     @X  = will be passed to strftime as %%X format"                     "\n");	
+	printf("     \\n = newline (and other C-string-style escapes)"                   "\n");	
 
-	printf("  -u        unexport all GPIO ressources.\n");
+
 	/*
 	printf("  --daemon \n");
 	printf("     run in background \n");
@@ -75,46 +70,53 @@ bool scanargs(int argc, char** argv)
 	{
 		char* arg = argv[i];
 		
-		#define ARG_EQU(SHORTARG, LONGARG) \
-			(STREQU(arg, "-"SHORTARG) || STREQU(arg, "--"LONGARG))
+		while (*arg == '-')
+			arg++;
 
-		#define IF_ARG_ASSIGN(SHORTARG, LONGARG, VAR, VAL) \
-			if ARG_EQU(SHORTARG, LONGARG) { VAR = VAL; }
-
-		#define IF_ARG_ASSIGN_STR(SHORTARG, LONGARG, STRVAR)	\
-			if ARG_EQU(SHORTARG, LONGARG) { i++; STRVAR = argv[i]; }
-
-		#define IF_ARG_ASSIGN_INT(SHORTARG, LONGARG, INTVAR)	\
-			if ARG_EQU(SHORTARG, LONGARG) { i++; INTVAR = atoi(argv[i]); }
-
-		#define IF_ARG_ASSIGN_CHAR(SHORTARG, LONGARG, CHARVAR)	\
-			if ARG_EQU(SHORTARG, LONGARG) { i++; CHARVAR = *(argv[i]); }
-
-		#define IF_ARG_ASSIGN_FLT(SHORTARG, LONGARG, FLOATVAR) \
-			if ARG_EQU(SHORTARG, LONGARG) { i++; FLOATVAR = atof(argv[i]); }
-
-		if STREQU(arg, "--") // ignore args from here
-		{
-			return false;
-		}
-		else 		
-		IF_ARG_ASSIGN("d", "daemon",			isdaemon, true)
-		else
-		IF_ARG_ASSIGN_STR("pid", "pidfile", 	pidfile)
-		else
-		IF_ARG_ASSIGN_INT("v", "verbosity", 	verbosity)
-		else
-		IF_ARG_ASSIGN_STR("fmt", "format", 		format)
-		else
-		IF_ARG_ASSIGN_STR("o", "output", 		outfilename)
-		else
-			
-		IF_ARG_ASSIGN("mqtt", "mqtt",			format, FORMAT_MQTT)
-		else
-		IF_ARG_ASSIGN("xdebug", "xdebug",		format, FORMAT_XDEBUG)
-		else			
+		#define ARG_EQU(LIT) (STREQU(arg, LIT))
 		
-		if ARG_EQU("u", "unexport")
+		if (ARG_EQU("fmt") || ARG_EQU("format"))
+		{
+			i++;
+			format = argv[i];
+		}
+		else
+		if (ARG_EQU("irq") || ARG_EQU("irq_gpio"))
+		{
+			i++;
+			rfm69_irq_gpionum = atoi(argv[i]);
+		}
+		else
+		if (ARG_EQU("noirq") || ARG_EQU("no_irq_gpio"))
+		{
+			rfm69_irq_gpionum = -1;
+		}
+		else			
+		if (ARG_EQU("v") || ARG_EQU("verbosity"))
+		{
+			i++;
+			verbosity = atoi(argv[i]);
+		}
+		else
+		if (ARG_EQU("pidfile"))
+		{
+			i++;
+			pidfile = argv[i];
+		}
+		else			
+		if (ARG_EQU("d") || ARG_EQU("debug"))
+		{
+			format = FORMAT_XDEBUG;
+			verbosity = 10;
+		}
+		else
+		if (ARG_EQU("mqtt"))
+		{
+			format = FORMAT_MQTT;
+			verbosity = 0;
+		}
+		else
+		if (ARG_EQU("ux") || ARG_EQU("unexport"))
 		{
 			rfm69io_init();			
 			rfm69io_deinit();
@@ -122,7 +124,7 @@ bool scanargs(int argc, char** argv)
 			return true;			
 		}		
 		else
-		if ARG_EQU("h", "help")
+		if (ARG_EQU("h") || ARG_EQU("help"))
 		{
 			usage(argv[0]);
 			exit(EXIT_SUCCESS);
@@ -349,13 +351,14 @@ void lacrosse_loop(void)
 	
 	FILE* outfile = stdout;
 
-	if (outfilename)
-	{
-		fclose(stdout);
-		outfile = fopen(outfilename, "wt");
-		setvbuf(outfile, NULL, _IONBF, 0);
-		if (verbosity > 0) fprintf(outfile, "#printing to %s ...\n", outfilename);
-	}
+	// if (outfilename)
+	// {
+		// fclose(stdout);
+		// outfile = fopen(outfilename, "wt");
+		// if (verbosity > 0) fprintf(outfile, "#printing to %s ...\n", outfilename);
+	// }
+	
+	setvbuf(outfile, NULL, _IONBF, 0);
 
 	while (run)
 	{
@@ -368,11 +371,11 @@ void lacrosse_loop(void)
 	
 	rfm69io_deinit();
 	
-	if (outfilename)
-	{
-		fclose(outfile);
-		outfile = NULL;
-	}
+	// if (outfilename)
+	// {
+		// fclose(outfile);
+		// outfile = NULL;
+	// }
 }
 
 int main(int argc, char* argv[])
@@ -381,11 +384,11 @@ int main(int argc, char* argv[])
 	
 	scanargs(argc, (const char**)(argv));
 
-	if (isdaemon)
-	{
-		verbosity = 0;
-		daemon(false, false);
-	}
+	// if (isdaemon)
+	// {
+		// verbosity = 0;
+		// daemon(false, false);
+	// }
 
 	pidfile_init();
 

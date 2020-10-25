@@ -431,6 +431,7 @@ void rfm69_readFifo(uint8_t* vals, int len)
 bool rfm69_waitForIrq(int timeout_secs, int timeout_us)
 {
 	#if (defined __RASPI__)
+	_RFMDBG(2, "rfm69_waitForIrq(tout=%u)...", timeout_us);
 	return pcd_wait(rfm69_irq_gpionum, timeout_secs, timeout_us);
 	#endif
 }
