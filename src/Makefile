@@ -1,8 +1,16 @@
+USE_MOSQUITTO = 1
+# change these to set the proper directories where each files should be
+TARGET     = rfm69_lacrosse
+SRCDIR     = .
+OBJDIR     = /tmp/obj_$(TARGET)
+BINDIR     = /tmp
+INSTALLDIR = /bin
+
 CC       = gcc
 DEFS     = -D_BSD_SOURCE -D_LINUX -DLINUX -D__RASPI__ -DRFM69=1
 # compiling flags here
 #CFLAGS   = -x c -std=c99 -Wall -D_LINUX
-CFLAGS   = -std=c99 $(DEFS)
+
 
 # http://www.netzmafia.de/skripten/hardware/RasPi/RasPi_SPI.html
 # $ modprobe spi_bcm2708
@@ -12,19 +20,17 @@ CFLAGS   = -std=c99 $(DEFS)
 
 LINKER   = gcc -o
 # linking flags here
-LFLAGS   = -lrt -lpthread -lm
-#LFLAGS   = -lrt
+#LFLAGS   = -lrt -lpthread -lm
+LFLAGS   = -lrt
 
-# change these to set the proper directories where each files shoould be
-TARGET     = rfm69_lacrosse
-SRCDIR     = .
-OBJDIR     = /tmp/obj_$(TARGET)
-BINDIR     = /tmp
-INSTALLDIR = /bin
+ifeq ($(USE_MOSQUITTO), 1)
+	DEFS += -DUSE_MOSQUITTO=1
+	MOSQ_LFLAGS = -lmosquitto -DUSE_MOSQUITTO=1
+	LFLAGS += $(MOSQ_LFLAGS)
+endif
 
+CFLAGS   = -std=c99 $(DEFS)
 
-
-#GLOBCFGS := $(SRCDIR)/config.h
 GLOBCFGS := 
 SOURCES  := $(wildcard $(SRCDIR)/*.c)
 INCLUDES := $(wildcard $(SRCDIR)/*.h)
