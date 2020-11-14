@@ -152,10 +152,7 @@ void mqtt_deinit(void)
 	mosquitto_lib_cleanup();
 }
 	
-#endif
-
-
-
+#endif // #if (USE_MOSQUITTO == 1)
 
 void usage(const char* progname)
 {
@@ -309,7 +306,7 @@ bool scanargs(int argc, char** argv)
 			clean_session = atoi(argv[i]);
 		}
 		else
-#endif
+#endif // #if (USE_MOSQUITTO == 1)
 		if (ARG_EQU("ux") || ARG_EQU("unexport"))
 		{
 			rfm69io_init();			
@@ -510,7 +507,7 @@ void lacrosse_printvalue(FILE* outfile, const char* type, const char* unit, int 
 	char line[256];	
 	print_sensor_formatted(line, sizeof(line), format, type, id, valstr, unit);
 	fprintf(outfile, "%s\n", line);
-
+#if (USE_MOSQUITTO == 1)
 	if (mosq)
 	{
 		char* delim = strchr(line, '=');
@@ -524,6 +521,7 @@ void lacrosse_printvalue(FILE* outfile, const char* type, const char* unit, int 
 			mosquitto_publish(mosq, msgid, topic, strlen(payload), payload, qos, retain);
 		}
 	}
+#endif // #if (USE_MOSQUITTO == 1)
 }
 
 void lacrosse_printsensor(FILE* outfile, const lacsensor_t* lacs)
