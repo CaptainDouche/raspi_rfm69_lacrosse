@@ -578,7 +578,9 @@ void lacrosse_loop(void)
 			lacrosse_printsensor(outfile, &lacs);
 		}
 		
+		#if (USE_MOSQUITTO == 1)
 		mosquitto_loop(mosq, 0, 1);
+		#endif
 	}
 	
 	rfm69io_deinit();
