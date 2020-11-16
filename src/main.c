@@ -5,13 +5,13 @@
 // https://github.com/dekay/DavisRFM69
 // http://www.davis-wetterstationen.de/
 
+#define EXE_NAME	"rfm69_lacrosse"
 
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <stdint.h>
 #include <time.h>
-#include <signal.h>
 #include <stdbool.h>
 #include <stdarg.h>
 
@@ -27,9 +27,122 @@
 #define FORMAT_DEBUG		"@H:@M:@S: %x_%t\t%v %u"
 #define FORMAT_MQTT			"rf/%x/%t=%v %u"
 
-int  verbosity 				= 0;
-const char* pidfile			= NULL;
 const char* format 			= FORMAT_DEBUG;
+int verbosity 				= 0;
+
+
+#if 1 // signal, pidfile
+
+#include <signal.h>
+
+volatile bool run 			= true;
+
+static const char* signames[] =
+{
+	"NULL", 
+	"HUP" ,
+	"INT" ,
+	"QUIT" ,
+	"ILL" ,
+	"TRAP" ,
+	"ABRT" ,
+	"EMT" ,
+	"FPE" ,
+	"KILL" ,
+	"BUS" ,
+	"SEGV" ,
+	"SYS" ,
+	"PIPE" ,
+	"ALRM" ,
+	"TERM" ,
+	"URG" ,
+	"STOP" ,
+	"TSTP" ,
+	"CONT" ,
+	"CHLD" ,
+	"TTIN" ,
+	"TTOU" ,
+	"IO" ,
+	"XCPU" ,
+	"XFSZ" ,
+	"VTALRM" ,
+	"PROF" ,
+	"WINCH" ,
+	"INFO" ,
+	"USR1" ,
+	"USR2",	
+};
+
+int str2signum(const char* str)
+{
+	for (int i=0; i<ELEMCNT(signames); i++)
+	{
+		if STRIEQU(str, signames[i])
+			return i;
+	}
+	
+	return atoi(str);
+}
+
+void sighandler(int signum)
+{
+	//if (verbosity > 0) printf("\n\n*** received %s (%s %d) ***\n", strsignal(signum), signames[signum], signum);
+	if (verbosity > 0) printf("\n\n*** received signal %s (%d) ***\n", signames[signum], signum);
+	run = false;
+}
+
+void signals_init(void)
+{
+	signal(SIGINT,  sighandler);
+	signal(SIGTERM, sighandler);
+}
+
+void signals_deinit(void)
+{
+}
+
+#endif // signals
+
+#if 1 // pidfile
+
+#define PIDFILE_DEFAULT		"/tmp/" EXE_NAME ".pid"
+const char* pidfile			= NULL;
+
+void pidfile_init(void)
+{
+	if (pidfile)
+	{
+		FILE* f = fopen(pidfile, "wt");
+		if (f)
+		{
+			fprintf(f, "%u", getpid());
+			fclose(f);
+		}
+	}
+}
+
+pid_t pidfile_read(void)
+{
+	pid_t pid = 0;
+	FILE* file = fopen(pidfile, "rt");
+	if (file)
+	{
+		fscanf(file, "%u", &pid);
+		fclose(file);
+	}
+	return pid;
+}
+
+void pidfile_deinit(void)
+{
+	if (pidfile)
+	{
+		unlink(pidfile);
+	}
+}
+
+#endif // pidfile
+
 
 #if (USE_MOSQUITTO == 1)
 	
@@ -50,6 +163,10 @@ int qos						= 0;
 bool clean_session 			= true;
 
 struct mosquitto *mosq		= NULL;
+int mqtt_debug				= 0;
+
+#define MQTT_DELIM			'='
+#define DEBUG_TOPIC			"/debug/" EXE_NAME
 	
 void mosq_callback_log(struct mosquitto *mosq, void *userdata, int level, const char *str)
 {
@@ -65,7 +182,7 @@ void mosq_callback_log(struct mosquitto *mosq, void *userdata, int level, const 
 
 	//printf(TSFMT "%s: %s\n", TickStamp(), lookup_name(loglevelnames, level), str);
 	//if (verbosity > 0) printf("LOG: %s: %s\n", lookup_name(loglevelnames, level), str);
-	if (verbosity > 0) printf("LOG: (LEV_%02x) %s\n", level, str);
+	if (mqtt_debug > 0) printf("LOG: (LEV_%02x) %s\n", level, str);
 	
 	// dirty workaround...
 	if (strstr(str, "received CONNACK"))
@@ -76,7 +193,7 @@ void mosq_callback_log(struct mosquitto *mosq, void *userdata, int level, const 
 
 void mosq_callback_connect(struct mosquitto *mosq, void *obj, int result)
 {
-	if (verbosity > 0) printf("connect callback: result=%d\n", result);
+	if (mqtt_debug > 0) printf("connect callback: result=%d\n", result);
 }
 	
 bool mqtt_init(void)
@@ -97,13 +214,13 @@ bool mqtt_init(void)
 		}
 
 		// mosquitto_will_set(...)
-		if (verbosity > 0) printf("Connecting to %s:%u (keepalive=%u) ... \n", host, port, keepalive);
+		if (mqtt_debug > 0) printf("Connecting to %s:%u (keepalive=%u) ... \n", host, port, keepalive);
 		
 		// https://mosquitto.org/api/files/mosquitto-h.html#mosquitto_connect
 		int rc = mosquitto_connect(mosq, host, port, keepalive);
 		if (rc == MOSQ_ERR_SUCCESS)
 		{
-			if (verbosity > 0) printf("connected.\n");
+			if (mqtt_debug > 0) printf("connected.\n");
 		}
 		else 
 		{
@@ -128,6 +245,17 @@ bool mqtt_init(void)
 			return false;
 		}
 		*/
+		
+		if (mqtt_debug)
+		{
+			char payl[64];
+			snprintf(payl, sizeof(payl), "%lu", getpid());
+			mosquitto_publish(mosq, NULL, DEBUG_TOPIC "/pid", strlen(payl), payl, 0, true);
+			snprintf(payl, sizeof(payl), "%lu", time(NULL));
+			mosquitto_publish(mosq, NULL, DEBUG_TOPIC "/starttime", strlen(payl), payl, 0, true);
+			snprintf(payl, sizeof(payl), "yes");
+			mosquitto_publish(mosq, NULL, DEBUG_TOPIC "/alive", strlen(payl), payl, 0, true);
+		}
 
 		return true;
 	}
@@ -140,7 +268,14 @@ bool mqtt_init(void)
 
 void mqtt_deinit(void)
 {
-	if (verbosity > 0) printf("disconnecting ...\n");
+	if (mqtt_debug)
+	{
+		char payl[64];		
+		snprintf(payl, sizeof(payl), "no");
+		mosquitto_publish(mosq, NULL, DEBUG_TOPIC "/alive", strlen(payl), payl, 0, true);
+	}
+	
+	if (mqtt_debug > 0) printf("disconnecting ...\n");
 
 	if (mosq)
 	{
@@ -152,7 +287,8 @@ void mqtt_deinit(void)
 	mosquitto_lib_cleanup();
 }
 	
-#endif // #if (USE_MOSQUITTO == 1)
+#endif
+
 
 void usage(const char* progname)
 {
@@ -160,6 +296,7 @@ void usage(const char* progname)
 	printf("  -irq <GPIONUM>       use GPIO Pin <GPIONUM> for IRQ.\n");
 	printf("  -noirq               dont use an GPIO Pin for IRQ. (uses polling)\n");	
 	printf("  -ux                  unexport all GPIO ressources (if after crashes sth is blocked).\n");	
+	printf("  -kill [SIGNAME]      send a signal to a daemonized rfm69_lacrosse (found via pidfile) and exit.\n");	
 	printf("  -format <FORMAT>     format the output. may contain ...\n");
 	printf("     %%x = sensor id: <hex integer>"                                     "\n");
 	printf("     %%i = sensor id: <dec integer>"                                     "\n");
@@ -173,10 +310,12 @@ void usage(const char* progname)
 	printf("     @X  = will be passed to strftime as %%X format"                     "\n");	
 	printf("     \\n = newline (and other C-string-style escapes)"                   "\n");	
 #if (USE_MOSQUITTO == 1)
-	printf("  -mqtt:host <HOST>           connect to a MQTT broker at <HOST>\n");	
-	printf("  -mqtt:port <PORT>           \n");
-	printf("  -mqtt:username <USERNAME>   \n");
-	printf("  -mqtt:password <PASSWORD>   \n");
+	printf("  -mqtt                           publish via MQTT: format the output like <TOPIC>%c<PAYLOAD> \n", MQTT_DELIM);
+	printf("     -mqtt:host <HOST>            connect to a MQTT broker at <HOST>\n");	
+	printf("     -mqtt:port <PORT>            \n");
+	printf("     -mqtt:username <USERNAME>    \n");
+	printf("     -mqtt:password <PASSWORD>    \n");
+	printf("     -mqtt:debug                  publishes some debug infos under " DEBUG_TOPIC "\n");
 #endif
 	printf("Version: " COMPILE_TIMESTAMP " \n");	
 }
@@ -190,7 +329,8 @@ bool scanargs(int argc, char** argv)
 		while (*arg == '-')
 			arg++;
 
-		#define ARG_EQU(LIT) (STREQU(arg, LIT))
+		#define ARG_EQU(LIT) 	(STREQU(arg, LIT))
+		#define ARG_STARTS(LIT) (STRSTARTS(arg, LIT))
 		
 		if (ARG_EQU("fmt") || ARG_EQU("format"))
 		{
@@ -229,17 +369,48 @@ bool scanargs(int argc, char** argv)
 		else
 		if (ARG_EQU("daemon"))
 		{
+			if (!pidfile)
+				pidfile = PIDFILE_DEFAULT;
+
+			if (pidfile_read())
+			{
+				eprintf("already running? pidfile %s already exists.\n", pidfile);
+				exit(EXIT_FAILURE);
+			}
+			
 			daemon(false, false);
 		}
-		else			
-		
+		else
+		if (ARG_EQU("kill"))
+		{
+			if (!pidfile)
+				pidfile = PIDFILE_DEFAULT;			
+			pid_t pid = pidfile_read();
+
+			if (pid)
+			{			
+				i++;
+				int sig = str2signum((i<argc) ? argv[i] : "TERM");
+				int res = kill(pid, sig);
+				printf("kill pid:%u sig:%u => %d\n", pid, sig, res);
+				exit(res);
+			}
+			else
+			{
+				eprintf("could not read pidfile %s.\n", pidfile);
+				exit(EXIT_FAILURE);
+			}
+			return true;
+		}
+		else
+
 #if (USE_MOSQUITTO == 1)
 		if (ARG_EQU("mqtt")) // will enable mqtt with default settings
 		{
 			host = "localhost";
 			format = FORMAT_MQTT;
 		}
-		else	
+		else
 		if (ARG_EQU("mqtt:host"))
 		{
 			i++;
@@ -306,10 +477,15 @@ bool scanargs(int argc, char** argv)
 			clean_session = atoi(argv[i]);
 		}
 		else
-#endif // #if (USE_MOSQUITTO == 1)
+		if (ARG_EQU("mqtt:debug"))
+		{
+			mqtt_debug = 1;
+		}
+		else
+#endif
 		if (ARG_EQU("ux") || ARG_EQU("unexport"))
 		{
-			rfm69io_init();			
+			rfm69io_init();
 			rfm69io_deinit();
 			exit(EXIT_SUCCESS);
 			return true;			
@@ -317,13 +493,13 @@ bool scanargs(int argc, char** argv)
 		else
 		if (ARG_EQU("h") || ARG_EQU("help"))
 		{
-			usage(argv[0]);
+			usage(EXE_NAME); // argv[0]);
 			exit(EXIT_SUCCESS);
 		}
 		else
 		{
 			eprintf("unrecognized argument: %s\n", arg);
-			usage(argv[0]);
+			usage(EXE_NAME); // argv[0]);
 			exit(EXIT_FAILURE);
 		}
 	}
@@ -331,59 +507,7 @@ bool scanargs(int argc, char** argv)
 	return false;
 }
 
-#if 1 // signal, pidfile
 
-#include <signal.h>
-
-volatile bool run = true;
-
-void sighandler(int signum)
-{
-	if (verbosity > 0) printf("\n\n***received process signal %d ***\n", signum);
-	run = false;
-}
-
-void signals_init(void)
-{
-	signal(SIGINT,  sighandler);
-	signal(SIGTERM, sighandler);
-
-	#ifdef _LINUX
-	signal(SIGPIPE, sighandler);		
-	//signal(SIGPIPE, SIG_IGN); // http://stackoverflow.com/questions/108183/how-to-prevent-sigpipes-or-handle-them-properly
-	#endif
-}
-
-void signals_deinit(void)
-{
-}
-
-void pidfile_init(void)
-{
-	if (pidfile)
-	{
-		FILE* f = fopen(pidfile, "wt");
-		if (f)
-		{
-			#if (defined _WIN32)
-			fprintf(f, "%u", GetCurrentProcessId());
-			#elif (defined _LINUX)
-			fprintf(f, "%u", getpid());
-			#endif
-			fclose(f);
-		}
-	}
-}
-
-void pidfile_deinit(void)
-{
-	if (pidfile)
-	{
-		unlink(pidfile);
-	}
-}
-
-#endif
 
 char unesc(char c)
 {
@@ -399,10 +523,6 @@ char unesc(char c)
     return c;
 }
 
-
-
-
-
 void print_sensor_formatted(
 	char* str, int len,
 	const char* format, 	
@@ -410,95 +530,94 @@ void print_sensor_formatted(
 	const char* valstr, const char* unit
 )
 {
-    time_t t_now = time(NULL);
-    struct tm * timeinfo = NULL;
+	time_t t_now = time(NULL);
+	struct tm * timeinfo = NULL;
 	
-    const char* p = format;
-    char c;
+	const char* p = format;
+	char c;
 	
 	int l = 0;
-    while ((c = *p++) != '\0')
-    {
-    	if (c == '%')
-        {
-        	c = *p++;
-            switch (c)
-            {
-                case 't':
-                {
-                    //fputs(type, outfile); break;
-                    l += snprintf(str+l, len-l, "%s", type); break;
-                }				
-                case 'x':
-                {
-                    //fprintf(outfile, "%02x", id); break;
-                    l += snprintf(str+l, len-l, "%02x", id); break;
-                }
-                case 'i':
-                {
-                    //fprintf(outfile, "%i", id); break;
-                    l += snprintf(str+l, len-l, "%i", id); break;
-                }
-                case 'v': // value
-                {
-                    //fputs(valstr, outfile); break;
+	while ((c = *p++) != '\0')
+	{
+		if (c == '%')
+		{
+			c = *p++;
+			switch (c)
+			{
+				case 't':
+				{
+					//fputs(type, outfile); break;
+					l += snprintf(str+l, len-l, "%s", type); break;
+				}				
+				case 'x':
+				{
+					//fprintf(outfile, "%02x", id); break;
+					l += snprintf(str+l, len-l, "%02x", id); break;
+				}
+				case 'i':
+				{
+					//fprintf(outfile, "%i", id); break;
+					l += snprintf(str+l, len-l, "%i", id); break;
+				}
+				case 'v': // value
+				{
+					//fputs(valstr, outfile); break;
 					l += snprintf(str+l, len-l, "%s", valstr); break;
-                }
-                case 'u': // unit
-                {
-                    //fputs(unit, outfile); break;
+				}
+				case 'u': // unit
+				{
+					//fputs(unit, outfile); break;
 					l += snprintf(str+l, len-l, "%s", unit); break;
-                }				
-                case 'y': // unixtime
-                {
-                    //fprintf(outfile, "%lu", t_now); break;
-                    l += snprintf(str+l, len-l, "%lu", t_now); break;
-                }
-                default:
-                {
-                    //fputc(c, outfile); break;
-                    str[l++] = c;
+				}				
+				case 'y': // unixtime
+				{
+					//fprintf(outfile, "%lu", t_now); break;
+					l += snprintf(str+l, len-l, "%lu", t_now); break;
+				}
+				default:
+				{
+					//fputc(c, outfile); break;
+					str[l++] = c;
 					str[l]   = '\0';
-                }
-            }
-        }
-        else
-    	if (c == '@')
-        {
-            if (!timeinfo)
-            {
-            	timeinfo = localtime(&t_now);
-            }
+				}
+			}
+		}
+		else
+		if (c == '@')
+		{
+			if (!timeinfo)
+			{
+				timeinfo = localtime(&t_now);
+			}
 			
-        	c = *p++;
-            char strf[3] = "%_\0";
-            strf[1] = c;
+			c = *p++;
+			char strf[3] = "%_\0";
+			strf[1] = c;
 
-            //char strbuf[32] = "";
-            // if (strftime(strbuf, sizeof(strbuf), strf, timeinfo))
+			//char strbuf[32] = "";
+			// if (strftime(strbuf, sizeof(strbuf), strf, timeinfo))
 			// {
-            	// fputs(strbuf, outfile);
-            // }
+				// fputs(strbuf, outfile);
+			// }
 			l += strftime(str+l, len-l, strf, timeinfo);
 			
-        }
-        else
-    	if (c == '\\')
-        {
-        	c = *p++;
-            //fputc(unesc(c), outfile);
+		}
+		else
+		if (c == '\\')
+		{
+			c = *p++;
+			//fputc(unesc(c), outfile);
 			str[l++] = unesc(c);
 			str[l]   = '\0';
-        }
-        else
-        {
-            //fputc(c, outfile);
+		}
+		else
+		{
+			//fputc(c, outfile);
 			str[l++] = c;
 			str[l]   = '\0';			
-        }
-    }
+		}
+	}
 }
-
 
 
 //void lacrosse_printvalue(FILE* outfile, const lacsensor_t* lacs, int flag, const char* type, const char* unit, const char* vfmt, ...)
@@ -507,10 +626,11 @@ void lacrosse_printvalue(FILE* outfile, const char* type, const char* unit, int 
 	char line[256];	
 	print_sensor_formatted(line, sizeof(line), format, type, id, valstr, unit);
 	fprintf(outfile, "%s\n", line);
+
 #if (USE_MOSQUITTO == 1)
 	if (mosq)
 	{
-		char* delim = strchr(line, '=');
+		char* delim = strchr(line, MQTT_DELIM); 
 		if (delim)
 		{
 			*delim = '\0';
@@ -521,7 +641,7 @@ void lacrosse_printvalue(FILE* outfile, const char* type, const char* unit, int 
 			mosquitto_publish(mosq, msgid, topic, strlen(payload), payload, qos, retain);
 		}
 	}
-#endif // #if (USE_MOSQUITTO == 1)
+#endif
 }
 
 void lacrosse_printsensor(FILE* outfile, const lacsensor_t* lacs)
@@ -554,7 +674,20 @@ void lacrosse_printsensor(FILE* outfile, const lacsensor_t* lacs)
 	
 }
 
+void onsecond(void)
+{
+	#if (USE_MOSQUITTO == 1)
+	mosquitto_loop(mosq, 0, 1);
 
+	static unsigned long int h = 0;
+	if (mqtt_debug)
+	{
+		char payl[64];
+		snprintf(payl, sizeof(payl), "%lu", h++);
+		mosquitto_publish(mosq, NULL, DEBUG_TOPIC "/heartbeat", strlen(payl), payl, 0, true);
+	}
+	#endif
+}
 
 void lacrosse_loop(void)
 {
@@ -569,18 +702,32 @@ void lacrosse_loop(void)
 	setvbuf(outfile, NULL, _IONBF, 0);
 
 	time_t t_prev = 0;
-	
+
+	static unsigned long msgs_cnt = 0;
 	while (run)
 	{
 		lacsensor_t lacs;
 		if (lacrosse_receive(&lacs, 1))
-		{		
+		{
+			msgs_cnt++;
 			lacrosse_printsensor(outfile, &lacs);
+			
+			if (mqtt_debug)
+			{
+				char payl[64];
+				snprintf(payl, sizeof(payl), "%lu", time(NULL));
+				mosquitto_publish(mosq, NULL, DEBUG_TOPIC "/msgs/last", strlen(payl), payl, 0, true);	
+				snprintf(payl, sizeof(payl), "%lu", msgs_cnt);
+				mosquitto_publish(mosq, NULL, DEBUG_TOPIC "/msgs/count", strlen(payl), payl, 0, true);
+			}
 		}
 		
-		#if (USE_MOSQUITTO == 1)
-		mosquitto_loop(mosq, 0, 1);
-		#endif
+		time_t t = time(NULL);
+		if (t != t_prev)
+		{
+			onsecond();
+			t_prev = t;
+		}
 	}
 	
 	rfm69io_deinit();
@@ -602,7 +749,7 @@ int main(int argc, char* argv[])
 	#endif
 
 	lacrosse_loop();
-	
+
 	#if (USE_MOSQUITTO == 1)
 	if (host)
 		mqtt_deinit();
