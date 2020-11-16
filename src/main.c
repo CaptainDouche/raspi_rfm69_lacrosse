@@ -712,6 +712,7 @@ void lacrosse_loop(void)
 			msgs_cnt++;
 			lacrosse_printsensor(outfile, &lacs);
 			
+			#if (USE_MOSQUITTO == 1)
 			if (mqtt_debug)
 			{
 				char payl[64];
@@ -720,6 +721,7 @@ void lacrosse_loop(void)
 				snprintf(payl, sizeof(payl), "%lu", msgs_cnt);
 				mosquitto_publish(mosq, NULL, DEBUG_TOPIC "/msgs/count", strlen(payl), payl, 0, true);
 			}
+			#endif
 		}
 		
 		time_t t = time(NULL);
