@@ -647,8 +647,7 @@ void lacrosse_printvalue(FILE* outfile, const char* type, const char* unit, int 
 void lacrosse_printsensor(FILE* outfile, const lacsensor_t* lacs)
 {
 	char valstr[32];
-	
-	
+
 	#define LAC_PNR_VAL(TYPE, UNIT, VFMT, VAL) \
 		{ \
 			snprintf(valstr, sizeof(valstr), VFMT, VAL); \
@@ -659,7 +658,6 @@ void lacrosse_printsensor(FILE* outfile, const lacsensor_t* lacs)
 	#define IF_FLAG_LAC_PNR_VAL(FLAG, TYPE, UNIT, VFMT, VAL) \
 		if (BIT_GET(lacs->flags, FLAG)) LAC_PNR_VAL(TYPE, UNIT, VFMT, VAL)
 
-
 	LAC_PNR_VAL("timestamp", ""   , "%lu"   , time(NULL));
 	IF_FLAG_LAC_PNR_VAL(FLAG_TEMP     , "temp"     , "C"  , "%+.1f", lacs->temp                  );
 	IF_FLAG_LAC_PNR_VAL(FLAG_HUMID    , "humid"    , "%"  , "%02u" , lacs->humid                 );
@@ -669,9 +667,6 @@ void lacrosse_printsensor(FILE* outfile, const lacsensor_t* lacs)
 	IF_FLAG_LAC_PNR_VAL(FLAG_WINDGUST , "wgust"    , "m/s", "%u"   , lacs->windgust              );
 	LAC_PNR_VAL("batt_new" , ""   , "%c"   , BIT_GET(lacs->flags, FLAG_NEWBATT)  ? '1':'0');
 	LAC_PNR_VAL("batt_weak", ""   , "%c"   , BIT_GET(lacs->flags, FLAG_WEAKBATT) ? '1':'0');
-	
-	
-	
 }
 
 void onsecond(void)
